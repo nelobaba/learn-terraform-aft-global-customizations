@@ -1,0 +1,70 @@
+name: org-custom-scp
+
+# Applies the org-level SCPs in scp/ against the MANAGEMENT account.
+# This is intentionally separate from AFT's global-customizations CodePipeline,
+# which applies scp/'s sibling terraform/ dir per *member* account. SCPs are
+# org-scoped and must be applied once against the management account.
+
+on:
+  push:
+    branches: [main]
+    paths: ["scp/**", ".github/workflows/scp-deploy.yml"]
+  pull_request:
+    paths: ["scp/**"]
+  workflow_dispatch:
+
+permissions:
+  id-token: write   # for GitHub OIDC → AWS
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: org-custom-scp
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-2
+  TF_IN_AUTOMATION: "true"
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: scp
+    steps:
+      - uses: actions/checkout@v4
+
+      # Assumes a role in the MANAGEMENT account. Create this role with a trust
+      # policy for GitHub OIDC and permissions for organizations:* on SCPs.
+      # Store its ARN as the repo secret AWS_MGMT_SCP_ROLE_ARN.
+      - name: Configure AWS credentials (management account)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_MGMT_SCP_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: gha-org-custom-scp
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.5"
+
+      - name: Terraform fmt
+        run: terraform fmt -check -recursive
+
+      - name: Terraform init
+        run: terraform init -input=false
+
+      - name: Terraform validate
+        run: terraform validate
+
+      - name: Terraform plan
+        run: terraform plan -input=false -no-color -out=tfplan
+        # tfvars is read automatically if you commit terraform.tfvars, or pass
+        # -var-file / TF_VAR_* env. Prefer TF_VAR_* / a committed non-secret
+        # tfvars for OU ids.
+
+      # Apply only on push to main (never on PRs).
+      - name: Terraform apply
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        run: terraform apply -input=false -no-color tfplan

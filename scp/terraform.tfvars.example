@@ -1,0 +1,36 @@
+# Copy to terraform.tfvars and fill in. Do NOT commit real terraform.tfvars if
+# it contains account-specific ARNs you'd rather keep out of git history.
+
+home_region = "us-east-2"
+
+# Leave null when applying with management-account credentials (recommended:
+# GitHub OIDC → role in the management account). Otherwise set the role to
+# assume in the management account.
+management_account_role_arn = null
+
+# Regions your org is allowed to operate regional services in. MUST include the
+# CT home region and the TF backend secondary region.
+allowed_regions = ["us-east-2", "us-east-1"]
+
+# OU ids to attach the region-restriction SCP to. Get them with:
+#   ROOT=$(aws organizations list-roots --query 'Roots[0].Id' --output text)
+#   aws organizations list-organizational-units-for-parent --parent-id "$ROOT"
+region_restriction_target_ou_ids = [
+  "ou-xxxx-sandbox00", # Sandbox
+  "ou-xxxx-prod00000", # Production
+  # "ou-xxxx-infra0000", # Infrastructure (optional)
+]
+
+# Attach deny-log-tampering to the ROOT to cover every member account. The
+# management account is always exempt from SCPs, so this is safe. Use the value
+# printed by `terraform output organization_root_id` (or list-roots).
+log_tampering_target_ids = [
+  "r-xxxx", # organization root
+]
+
+# Central log buckets in the Log Archive account to protect (optional but
+# recommended). Include both the bucket ARN and the /* object ARN.
+central_log_bucket_arns = [
+  # "arn:aws:s3:::aws-controltower-logs-<logarchive-acct>-us-east-2",
+  # "arn:aws:s3:::aws-controltower-logs-<logarchive-acct>-us-east-2/*",
+]
