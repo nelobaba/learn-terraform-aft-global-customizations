@@ -200,6 +200,9 @@ crash.log
 # to change depending on the environment.
 #
 *.tfvars
+# Exception: the SCP module's tfvars holds only non-sensitive OU/root ids and is
+# consumed by the org-custom-scp CI workflow, so it is intentionally committed.
+!scp/terraform.tfvars
 
 # Ignore override files as they are usually used to override resources locally and so
 # are not checked in
